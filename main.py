@@ -4,7 +4,7 @@ import matplotlib
 import wrapper
 
 
-np.random.seed(42)
+np.random.seed(60)
 X = []
 w = wrapper.Wrapper()
 w.run()
