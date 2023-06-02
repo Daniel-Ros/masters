@@ -7,12 +7,15 @@ from itertools import permutations
 from stats import Stats
 import time
 import json
+import time
+import json
 
 class Wrapper:
     def __init__(self):
         self.times = 25
         self.d = 20
         self.num_of_gausians = 2
+        self.num_of_samples = 50000
         self.num_of_samples = 50000
         self.stats = Stats()
         self.sparse = 8
@@ -54,6 +57,13 @@ class Wrapper:
         means = self.means @ phi
         covs = phi.T @ self.covs @ phi
 
+    def run_one_time(self, t,d, phi_o,X,Y,base_err):
+        U, S ,VH = np.linalg.svd(phi_o,full_matrices=False)
+        phi = U 
+
+        means = self.means @ phi
+        covs = phi.T @ self.covs @ phi
+
         #  target space
         Xt = X @ phi
         clft = mixture.GaussianMixture(n_components=self.num_of_gausians, covariance_type="full")
@@ -62,9 +72,15 @@ class Wrapper:
         clft.covariances_ = np.array(covs)
         clft.weights_ = np.array([0.5,0.5])
         Zt = clft.predict(Xt)
+        clft.fit(Xt)
+        clft.means_ = np.array(means)
+        clft.covariances_ = np.array(covs)
+        clft.weights_ = np.array([0.5,0.5])
+        Zt = clft.predict(Xt)
         Zt = self.permute(Y,Zt,self.num_of_gausians)
         new_err = (Y != Zt).sum()
         self.stats.add_resualt(t,d,base_err / self.num_of_samples ,new_err / self.num_of_samples)
+        print(t,d,base_err ,new_err)
         print(t,d,base_err ,new_err)
 
         
@@ -130,6 +146,25 @@ class Wrapper:
                 min_err = err
                 min_per = Zn
         return min_per
+    
+    def dump(self, X,Y , means, cov):
+        class NumpyEncoder(json.JSONEncoder):
+            def default(self, obj):
+                if isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                return json.JSONEncoder.default(self, obj)
+
+        obj = {
+            "x" : X.tolist(),
+            "y" : Y.tolist(),
+            "means": means,
+            "cov" : cov,
+        }
+
+        json_object = json.dumps(obj, indent=4,cls=NumpyEncoder)
+        with open(f"dump_{time.time()}.json", "w") as outfile:
+            outfile.write(json_object)
+
     
     def dump(self, X,Y , means, cov):
         class NumpyEncoder(json.JSONEncoder):

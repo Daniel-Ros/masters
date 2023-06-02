@@ -1,2 +1,4 @@
 masters/
 __pycache__/
+dump*.json
+res*
