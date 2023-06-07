@@ -35,7 +35,6 @@ class Wrapper:
         # self.dump(X,Y,self.means,self.covs)
         for _run in range(self.times):
             phi = np.random.normal(0,1,(self.d,self.d))
-                       
             # origin space
             
             clf.means_ = np.array(self.means)
@@ -48,14 +47,6 @@ class Wrapper:
             for t in range(2,d):    
                 self.run_one_time(t,d,phi[:d,:t],X,Y,base_err)
         self.stats.store_resualts(f"res_sparse_alinged_cords.csv")
-                    
-                    
-    def run_one_time(self, t,d, phi_o,X,Y,base_err):
-        U, S ,VH = np.linalg.svd(phi_o,full_matrices=False)
-        phi = U 
-
-        means = self.means @ phi
-        covs = phi.T @ self.covs @ phi
 
     def run_one_time(self, t,d, phi_o,X,Y,base_err):
         U, S ,VH = np.linalg.svd(phi_o,full_matrices=False)
