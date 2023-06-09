@@ -12,7 +12,7 @@ from utils import calc_bat
 
 class Wrapper:
     def __init__(self):
-        self.times = 25
+        self.times = 1
         self.d = 32
         self.num_of_gausians = 2
         self.num_of_samples = 50000
@@ -22,7 +22,7 @@ class Wrapper:
         self.noise = 0.000001
 
     def run(self):
-        for s in [1,2,4,8,16,32]:
+        for s in range(1,33):
             self.sparse = s
 
             self.means = self.gen_means(self.num_of_gausians,self.d)
