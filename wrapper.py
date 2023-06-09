@@ -7,8 +7,6 @@ from itertools import permutations
 from stats import Stats
 import time
 import json
-import time
-import json
 
 from utils import calc_bat
 
@@ -17,30 +15,32 @@ class Wrapper:
         self.times = 25
         self.d = 32
         self.num_of_gausians = 2
-        self.num_of_samples = 100
+        self.num_of_samples = 50000
         self.stats = Stats()
-        self.sparse = 8
+        self.sparse = 10
         self.alinged = self.sparse
+        self.noise = 0.000001
 
     def run(self):
-        for _run in range(self.times):
-            phi = np.random.normal(0,1,(self.d,self.d))
-            for s in [2,4,8,16,32]:
-                self.sparse = s
-                self.alinged = self.sparse
+        for s in [1,2,4,8,16,32]:
+            self.sparse = s
 
-                self.means = self.gen_means(self.num_of_gausians,self.d)
-                self.covs = self.gen_covs(self.num_of_gausians,self.d)
-                X_full,Y_full = self.gen_data(self.num_of_samples,self.means,self.covs)
+            self.means = self.gen_means(self.num_of_gausians,self.d)
+            self.covs = self.gen_covs(self.num_of_gausians,self.d)
+            X_full,Y_full = self.gen_data(self.num_of_samples,self.means,self.covs)
 
-                d = self.d
-                X = X_full[:,:d]
+            d = self.d
+
+            for _run in range(self.times):
+                phi = np.random.normal(0,1,(self.d,self.d))
+
+                X = np.zeros_like(X_full)
+                X[:,:d] = X_full[:,:d]
                 Y = Y_full
 
                 clf = mixture.GaussianMixture(n_components=self.num_of_gausians, covariance_type="full")
                 clf.fit(X)
-                # self.dump(X,Y,self.means,self.covs)
-                
+
                 # origin space
                 clf.means_ = np.array(self.means)
                 clf.covariances_ = np.array(self.covs)
@@ -51,7 +51,7 @@ class Wrapper:
             
                 for t in range(2,d):    
                     self.run_one_time(t,d,phi[:d,:t],X,Y,base_err)
-            self.stats.store_resualts(f"res_sparse_alinged_cords_with_bach{_run}.csv")
+        self.stats.store_resualts(f"res_sparse_alinged_cords_with_bach.csv")
 
     def run_one_time(self, t,d, phi_o,X,Y,base_err):
         U, S ,VH = np.linalg.svd(phi_o,full_matrices=False)
@@ -60,16 +60,12 @@ class Wrapper:
         means = self.means @ phi
         covs = phi.T @ self.covs @ phi
 
-        batch = calc_bat(0.5,0.5,phi,self.means[0], self.means[1] , self.covs[0] , self.covs[1])
+        batch =  calc_bat(0.5,0.5,phi,self.means[0], self.means[1] , self.covs[0] , self.covs[1],self.noise,t)
 
         #  target space
         Xt = X @ phi
+        Xt[:] += np.random.default_rng().multivariate_normal(np.zeros(t) ,np.identity(t) * self.noise)
         clft = mixture.GaussianMixture(n_components=self.num_of_gausians, covariance_type="full")
-        clft.fit(Xt)
-        clft.means_ = np.array(means)
-        clft.covariances_ = np.array(covs)
-        clft.weights_ = np.array([0.5,0.5])
-        Zt = clft.predict(Xt)
         clft.fit(Xt)
         clft.means_ = np.array(means)
         clft.covariances_ = np.array(covs)
@@ -77,9 +73,9 @@ class Wrapper:
         Zt = clft.predict(Xt)
         Zt = self.permute(Y,Zt,self.num_of_gausians)
         new_err = (Y != Zt).sum()
-        self.stats.add_resualt(t,d,base_err / self.num_of_samples ,new_err / self.num_of_samples,batch , self.sparse)
 
-        
+        self.stats.add_resualt(t,d,base_err / self.num_of_samples ,new_err / self.num_of_samples, batch , self.sparse)
+        print(t,d,base_err / self.num_of_samples ,new_err / self.num_of_samples , batch , self.sparse)
 
     def gen_data(self,size,means,cov):
         dataset = []
@@ -102,7 +98,6 @@ class Wrapper:
         slice = np.arange(self.sparse,d)
         v1[slice] = 0
         v2 = -v1
-        # v2[:self.alinged] = -v2[:self.alinged]
         return [v1,v2]
     
     def gen_covs(self,size,d):
@@ -110,17 +105,7 @@ class Wrapper:
         for i in range(size):
             sig = 4
             cov = sig * np.identity(d)
-
             if self.sparse != -1:
-                # for i in range(d - self.sparse):
-                #     ix = np.random.randint(d)
-                #     while cov[ix,ix] == 0:
-                #         ix = np.random.randint(d)
-                #     print(f"{ix},", end="")
-                #     cov[ix,ix] = 0
-                # print("")
-                # per = np.random.permutation(np.arange(d))
-                # slice = per[: (d - self.sparse)]
                 slice = np.arange(self.sparse,d)
                 for ix in slice:
                     cov[ix,ix] = 0
@@ -160,23 +145,3 @@ class Wrapper:
         json_object = json.dumps(obj, indent=4,cls=NumpyEncoder)
         with open(f"dump_{time.time()}.json", "w") as outfile:
             outfile.write(json_object)
-
-    
-    def dump(self, X,Y , means, cov):
-        class NumpyEncoder(json.JSONEncoder):
-            def default(self, obj):
-                if isinstance(obj, np.ndarray):
-                    return obj.tolist()
-                return json.JSONEncoder.default(self, obj)
-
-        obj = {
-            "x" : X.tolist(),
-            "y" : Y.tolist(),
-            "means": means,
-            "cov" : cov,
-        }
-
-        json_object = json.dumps(obj, indent=4,cls=NumpyEncoder)
-        with open(f"dump_{time.time()}.json", "w") as outfile:
-            outfile.write(json_object)
-
